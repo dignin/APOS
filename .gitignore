@@ -1,2 +1,4 @@
 /hello.py
-/pos.db
+/pos.db.venv/
+__pycache__/
+.venv/
