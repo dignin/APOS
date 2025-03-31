@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabs Manager</title>
+</head>
+<body>
+    <h1>Tabs Manager</h1>
+    <form id="createTabForm">
+        <h2>Create Tab</h2>
+        <label for="user_id">User ID:</label>
+        <input type="text" id="user_id" name="user_id" required>
+        <button type="submit">Create Tab</button>
+    </form>
+    <div id="response"></div>
+
+    <h2>Add Item to Tab</h2>
+    <form id="addItemForm">
+        <label for="add_user_id">User ID:</label>
+        <input type="text" id="add_user_id" name="user_id" required>
+        <label for="add_tab_index">Tab Index:</label>
+        <select id="add_tab_index" name="tab_index" required></select>
+        <label for="item_name">Item Name:</label>
+        <input type="text" id="item_name" name="item_name" required>
+        <label for="item_price">Item Price:</label>
+        <input type="number" id="item_price" name="item_price" step="0.01" required>
+        <button type="submit">Add Item</button>
+    </form>
+    <div id="addItemResponse"></div>
+
+    <h2>List All Users</h2>
+    <button id="listUsersButton">List Users</button>
+    <div id="usersResponse"></div>
+
+    <h2>View All Tabs</h2>
+    <button id="viewAllTabsButton">View All Tabs</button>
+    <div id="allTabsResponse"></div>
+
+    <h2>Update Item in Tab</h2>
+    <form id="updateItemForm">
+        <label for="update_user_id">User ID:</label>
+        <input type="text" id="update_user_id" name="user_id" required>
+        <label for="update_tab_index">Tab Index:</label>
+        <input type="number" id="update_tab_index" name="tab_index" required>
+        <label for="update_item_index">Item Index:</label>
+        <input type="number" id="update_item_index" name="item_index" required>
+        <label for="new_name">New Item Name:</label>
+        <input type="text" id="new_name" name="new_name" required>
+        <label for="new_price">New Item Price:</label>
+        <input type="number" id="new_price" name="new_price" step="0.01" required>
+        <button type="submit">Update Item</button>
+    </form>
+    <div id="updateResponse"></div>
+
+    <h2>Remove Item from Tab</h2>
+    <form id="removeItemForm">
+        <label for="remove_user_id">User ID:</label>
+        <input type="text" id="remove_user_id" name="user_id" required>
+        <label for="remove_tab_index">Tab Index:</label>
+        <input type="number" id="remove_tab_index" name="tab_index" required>
+        <label for="remove_item_index">Item Index:</label>
+        <input type="number" id="remove_item_index" name="item_index" required>
+        <button type="submit">Remove Item</button>
+    </form>
+    <div id="removeResponse"></div>
+
+    <script>
+        document.getElementById("createTabForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const response = await fetch("/create_tab", {
+                method: "POST",
+                body: formData,
+            });
+            const result = await response.json();
+            document.getElementById("response").innerText = JSON.stringify(result);
+
+            // Reset form fields
+            e.target.reset();
+        });
+
+        document.getElementById("addItemForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const response = await fetch("/add_item", {
+                method: "POST",
+                body: formData,
+            });
+            const result = await response.json();
+            document.getElementById("addItemResponse").innerText = JSON.stringify(result);
+
+            // Reset form fields
+            e.target.reset();
+
+            // Repopulate the tab dropdown in case new tabs were added
+            const userId = document.getElementById("add_user_id").value;
+            if (userId) {
+                const tabsResponse = await fetch(`/get_tabs/${userId}`);
+                const tabsResult = await tabsResponse.json();
+                const tabSelect = document.getElementById("add_tab_index");
+                tabSelect.innerHTML = "";
+                tabsResult.tabs.forEach((tab, index) => {
+                    const option = document.createElement("option");
+                    option.value = index;
+                    option.textContent = tab;
+                    tabSelect.appendChild(option);
+                });
+            }
+        });
+
+        document.getElementById("add_user_id").addEventListener("input", async (e) => {
+            const userId = e.target.value;
+            if (userId) {
+                const response = await fetch(`/get_tabs/${userId}`);
+                const result = await response.json();
+                const tabSelect = document.getElementById("add_tab_index");
+                tabSelect.innerHTML = "";
+                result.tabs.forEach((tab, index) => {
+                    const option = document.createElement("option");
+                    option.value = index;
+                    option.textContent = tab;
+                    tabSelect.appendChild(option);
+                });
+            }
+        });
+
+        document.getElementById("listUsersButton").addEventListener("click", async () => {
+            const response = await fetch("/list_users");
+            const usersResult = await response.json();
+            const usersResponseDiv = document.getElementById("usersResponse");
+            usersResponseDiv.innerHTML = "";
+
+            if (usersResult.users.length === 0) {
+                usersResponseDiv.innerText = "No users found.";
+                return;
+            }
+
+            usersResult.users.forEach(async (userId) => {
+                const userDiv = document.createElement("div");
+                userDiv.innerHTML = `<h3>User ID: ${userId}</h3>`;
+                const tabsResponse = await fetch(`/get_tabs/${userId}`);
+                const tabsResult = await tabsResponse.json();
+
+                if (tabsResult.tabs.length === 0) {
+                    userDiv.innerHTML += "<p>No tab available.</p>";
+                } else {
+                    const tabLink = document.createElement("a");
+                    tabLink.href = `/tab_details/${userId}/0`;
+                    tabLink.innerText = tabsResult.tabs[0];
+                    userDiv.appendChild(tabLink);
+                }
+
+                usersResponseDiv.appendChild(userDiv);
+            });
+        });
+
+        document.getElementById("viewAllTabsButton").addEventListener("click", async () => {
+            const response = await fetch("/get_all_tabs");
+            const result = await response.json();
+            document.getElementById("allTabsResponse").innerText = JSON.stringify(result);
+        });
+
+        document.getElementById("updateItemForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const response = await fetch("/update_item", {
+                method: "POST",
+                body: formData,
+            });
+            const result = await response.json();
+            document.getElementById("updateResponse").innerText = JSON.stringify(result);
+        });
+
+        document.getElementById("removeItemForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const response = await fetch("/remove_item", {
+                method: "POST",
+                body: formData,
+            });
+            const result = await response.json();
+            document.getElementById("removeResponse").innerText = JSON.stringify(result);
+        });
+    </script>
+</body>
+</html>
