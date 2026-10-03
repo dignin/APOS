@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% block content %}
+<h1>{{ t('Edit product') }}</h1><section class="panel"><form method="post">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>{{ t('Name') }}<input name="name" value="{{ request.form.get('name',product.name) }}" maxlength="120" required></label>
+<label>{{ t('Price in EUR') }}<input type="number" name="price" value="{{ request.form.get('price','%.2f'|format(product.cents/100)) }}" min="0.01" max="999999" step="0.01" required></label>
+<label>{{ t('Price in USD') }}<input type="number" name="usd_price" value="{{ request.form.get('usd_price','%.2f'|format(product.usd_cents/100)) }}" min="0.01" max="999999" step="0.01" required></label>
+<label><input type="checkbox" name="alcohol" value="1" {% if product.alcohol %}checked{% endif %}>{{ t('Alcohol: staff ordering only; check age before serving') }}</label><button>{{ t('Save product') }}</button></form>
+<p>{{ t('Changes apply to future orders. Existing positions and receipts keep their original product name and price.') }}</p>
+<a href="{{ url_for('settings') }}">{{ t('Cancel') }}</a></section>
+{% endblock %}

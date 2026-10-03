@@ -1,0 +1,9 @@
+name,price_eur,price_usd,in_stock,active
+Demo Coffee,2.50,3.00,true,true
+Demo Tea,2.00,2.50,true,true
+Demo Sparkling Water,1.50,2.00,true,true
+Demo Cola,2.50,3.00,true,true
+Demo Lager,3.50,4.00,true,true
+Demo Pretzel,2.00,2.50,true,true
+Demo Sandwich,4.50,5.50,false,true
+Demo Cake,3.00,3.50,false,true

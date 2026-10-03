@@ -1,0 +1,20 @@
+{% extends 'base.html' %}{% block content %}
+<h1>{{ t('Admin') }}</h1><p class="admin-links"><a href="{{ url_for('accounts') }}">{{ t('Accounts and roles') }}</a> <a href="{{ url_for('mail_settings') }}">{{ t('Outbound mail account') }}</a></p>
+<section class="panel">
+<h2>{{ t('General settings') }}</h2>
+<form method="post" class="settings-form">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>{{ t('Currency') }}<select name="currency"><option value="EUR" {% if currency == 'EUR' %}selected{% endif %}>EUR (€)</option><option value="USD" {% if currency == 'USD' %}selected{% endif %}>USD ($)</option></select></label><p>{{ t('Currency changes apply to new tabs. Existing tabs and receipts keep their recorded currency.') }}</p><label>{{ t('Guest-facing URL / FQDN') }}<input name="base_url" value="{{ base_url }}" placeholder="https://apos.example.org" maxlength="2048"></label>
+<details class="settings-password"><summary>{{ t('Change password') }}</summary><div class="form-grid"><label>{{ t('Current password') }}<input type="password" name="current_password" autocomplete="current-password"></label>
+<label>{{ t('New password (optional)') }}<input type="password" name="new_password" minlength="12" maxlength="256" autocomplete="new-password"></label>
+<label>{{ t('Confirm new password') }}<input type="password" name="confirm_password" minlength="12" maxlength="256" autocomplete="new-password"></label>
+</div></details><label class="checkbox"><input type="checkbox" name="guest_ordering" value="1" {% if guest_ordering %}checked{% endif %}>{{ t('Allow guests to add menu items to their own bon') }}</label><button>{{ t('Save settings') }}</button>
+</form>
+<p>{{ t('Leave password fields blank to keep your current password. Changing it signs out all staff browsers.') }}</p>
+<p>{{ t('A hostname uses HTTPS by default. Include http:// and the port for LAN testing. Changing this address updates guest links and QR codes; DNS and HTTPS must be configured separately.') }}</p>
+</section>
+{% include 'admin_management.html' %}
+{% for kind, notice, title in [('legal_notice', legal_notice, 'Legal notice'), ('privacy_notice', privacy_notice, 'Privacy notice')] %}
+<section class="panel"><div class="heading"><h2>{{ t(title) }}</h2><a href="{{ url_for('edit_notice',kind=kind) }}">{{ t('Edit full screen') }}</a></div><div class="notice-text">{{ notice }}</div></section>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<h1>{{ t('Legal notice') if kind == 'legal_notice' else t('Privacy notice') }}</h1><section class="panel notice-text">{{ notice if notice else t('The association has not configured this notice yet. Please contact staff.') }}</section>{% endblock %}

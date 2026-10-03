@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block content %}
+<h1>{{ t('Remove member') }}</h1><section class="panel"><h2>{{ member.name }} · {{ member.code }}</h2>
+<p>{{ t('This member will be removed from the member list. Historical tabs and receipts are retained. Any open tab must be settled or cancelled first.') }}</p>
+<form method="post"><input type="hidden" name="csrf" value="{{ csrf }}"><button>{{ t('Remove member') }}</button><a href="{{ url_for('settings') }}">{{ t('Cancel') }}</a></form>
+</section>{% endblock %}

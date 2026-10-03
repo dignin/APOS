@@ -1,0 +1,5 @@
+{% macro avatar(id,name,photo) %}
+<span class="member-avatar" {% if not photo %}role="img" aria-label="{{ name }}"{% endif %}>
+{% if photo %}<img src="{{ url_for('member_photo',member_id=id) }}" alt="{{ name }}" width="48" height="48" loading="lazy">{% else %}{{ name|initials }}{% endif %}
+</span>
+{% endmacro %}

@@ -1,93 +1,71 @@
-from models import Item
-from models import Purchase
-from models import TabsManager
+"""Local APOS server and maintenance commands."""
+import argparse
+from getpass import getpass
+from werkzeug.security import check_password_hash
+import os
+import sqlite3
+from pathlib import Path
 
-class Tab:
-    def __init__(self):
-        self.items = []
+from app import create_app, save_settings, price_cents
+from catalog_import import parse_catalog
 
-    def add_item(self, item):
-        self.items.append(item)
-
-    def list_items(self):
-        for item in self.items:
-            print(f"{item.name}: €{item.price:.2f}")
-
-    def clear(self):
-        self.items = []
-
-def menu():
-    print("\nPoint-of-Sale Menu:")
-    print("1. Create a new tab")
-    print("2. Switch to an existing tab")
-    print("3. Add Item to current tab")
-    print("4. View current tab")
-    print("5. Checkout current tab")
-    print("6. Exit")
 
 def main():
-    # Initialize the TabsManager
-    tabs_manager = TabsManager()
-    current_user_id = None
-    current_tab = None  # Ensure current_tab is initialized
-
-    while True:
-        menu()
-        choice = input("Select option: ")
-
-        if choice == "1":
-            print("Each user can only have one tab. A new tab will be automatically created if it doesn't exist.")
-            user_id = input("Enter user ID: ")
-            if tabs_manager.get_tabs(user_id):  # Check if the user already has a tab
-                print(f"User {user_id} already has a tab.")
-            else:
-                tabs_manager.add_tab(user_id)  # Removed the extra argument
-                print(f"Created a new tab for user {user_id}.")
-
-        elif choice == "2":
-            user_id = input("Enter user ID to switch to: ")
-            tabs = tabs_manager.get_tabs(user_id)  # Use get_tabs to fetch tabs
-            if not tabs:
-                print(f"No tab found for user {user_id}. A new tab will be created.")
-                tabs_manager.add_tab(user_id)  # Removed the extra argument
-                tabs = tabs_manager.get_tabs(user_id)
-            current_user_id = user_id
-            current_tab = tabs[0]  # Use the first tab for the user
-            print(f"Switched to the tab for user {user_id}.")
-
-        elif choice == "3":
-            if current_tab is None:  # Check if current_tab is set
-                print("No tab selected. Please create or switch to a tab first.")
-            else:
-                name = input("Item name: ")
-                price = float(input("Item price (in euros): "))
-                item = Item(name, price)
-                current_tab.add_item(item)  # Add item to the current tab
-                print(f"Added {item.name} to the current tab.")
-
-        elif choice == "4":
-            if current_user_id is None:
-                print("No tab selected. Please create or switch to a tab first.")
-            else:
-                print("Current Tab:")
-                current_tab.list_items()
-
-        elif choice == "5":
-            if current_user_id is None:
-                print("No tab selected. Please create or switch to a tab first.")
-            else:
-                purchase = Purchase(current_tab.items)
-                print("\nReceipt:\n")
-                print(purchase.receipt())
-                current_tab.clear()
-                print("Checked out and cleared the current tab.")
-
-        elif choice == "6":
-            print("Exiting POS...")
-            break
-
+    parser = argparse.ArgumentParser(description="APOS association point of sale")
+    parser.add_argument("command", nargs="?", choices=("serve", "backup", "password", "setup", "demo-stock"), default="serve")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=5000)
+    parser.add_argument("--output", help="New destination file for backup")
+    args = parser.parse_args()
+    os.umask(0o077)
+    app = create_app()
+    if args.command == "demo-stock":
+        rows = parse_catalog((Path(__file__).parent / "data" / "demo_catalog.csv").read_bytes(), price_cents)
+        with sqlite3.connect(app.config["DATABASE"]) as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            names = {row[0].casefold() for row in connection.execute("SELECT name FROM products")}
+            additions = [row for row in rows if row["name"].casefold() not in names]
+            connection.executemany("INSERT INTO products(name,cents,usd_cents,in_stock,active) VALUES (:name,:cents,:usd_cents,:in_stock,:active)", additions)
+        print(f"Added {len(additions)} demo products; existing products were preserved.")
+    elif args.command == "setup":
+        with sqlite3.connect(app.config["DATABASE"]) as connection:
+            current_url = connection.execute("SELECT value FROM settings WHERE key='patron_base_url'").fetchone()[0]
+            password = getpass("New recovery admin password (at least 12 characters): ")
+            if password != getpass("Confirm staff password: "):
+                parser.error("Passwords do not match")
+            base_url = input(f"Guest-facing URL/FQDN [{current_url}]: ").strip() or current_url
+            try:
+                save_settings(connection, base_url, password)
+            except ValueError as error:
+                parser.error(str(error))
+        print("Admin setup saved. Sign in as admin with your chosen password. Existing staff sessions have been signed out.")
+    elif args.command == "password":
+        with sqlite3.connect(app.config["DATABASE"]) as connection:
+            password_hash = connection.execute("SELECT password_hash FROM accounts WHERE username='admin'").fetchone()[0]
+        if check_password_hash(password_hash, app.config["STAFF_PASSWORD"]):
+            print(app.config["STAFF_PASSWORD"])
         else:
-            print("Invalid choice. Try again.")
+            print("A custom password is configured and cannot be displayed. Run 'python main.py setup' locally to reset it.")
+    elif args.command == "backup":
+        if not args.output:
+            parser.error("backup requires --output")
+        destination = Path(args.output)
+        if destination.resolve() == Path(app.config["DATABASE"]).resolve():
+            parser.error("backup destination must differ from the live database")
+        try:
+            with destination.open("xb"):
+                pass
+        except FileExistsError:
+            parser.error("backup destination already exists; choose a new filename")
+        with sqlite3.connect(app.config["DATABASE"]) as source, sqlite3.connect(destination) as target:
+            source.backup(target)
+        print(f"Backup saved to {destination}")
+    else:
+        from waitress import serve
+        print(f"APOS: http://{args.host}:{args.port}", flush=True)
+        print("Admin username: admin. Password: run 'python main.py password' in another terminal.", flush=True)
+        serve(app, host=args.host, port=args.port)
+
 
 if __name__ == "__main__":
     main()

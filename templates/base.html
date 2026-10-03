@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}APOS{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
+</head>
+<body data-pending-label="{{ t('Saving…') }}"><a class="skip-link" href="#main-content">{{ t('Skip to content') }}</a>
+<header>
+    <a class="brand" href="{{ url_for('index') }}">APOS <span>{{ t('Association point of sale') }}</span></a>
+    <nav>
+        {% if session.get("staff") %}
+        <a href="{{ url_for('index') }}" {% if request.endpoint in ['index','tab_details'] %}aria-current="page"{% endif %}>{{ t('Open tabs') }}</a>
+        <a href="{{ url_for('receipts') }}">{{ t('Receipts') }}</a>
+        <!-- administration is protected on the server as well -->{% if is_admin %}<a href="{{ url_for('settings') }}" {% if request.path.startswith('/admin') %}aria-current="page"{% endif %}>{{ t('Admin') }}</a>{% endif %}
+        <a href="{{ url_for('reports') }}">{{ t('Reports') }}</a>
+        {% endif %}
+        <details class="personal-menu">
+            <summary aria-label="{{ t('Personal menu') }}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>
+                <span>{{ t('Personal menu') }}</span><span class="menu-chevron" aria-hidden="true">▾</span>
+            </summary>
+            <div class="personal-menu-panel">{% if current_user %}<p>{{ current_user.username }} · {{ t(current_user.role) }}</p>{% endif %}
+                <form method="post" action="{{ url_for('language') }}">
+                    <input type="hidden" name="csrf" value="{{ csrf }}">
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <label>{{ t('Language') }}
+                        <select name="lang">
+                            <option value="de" {% if lang == 'de' %}selected{% endif %}>Deutsch</option>
+                            <option value="en" {% if lang == 'en' %}selected{% endif %}>English</option>
+                        </select>
+                    </label>
+                    <button>{{ t('Apply') }}</button>
+                </form>
+                {% if current_user %}
+                <form class="menu-signout" method="post" action="{{ url_for('logout') }}">
+                    <input type="hidden" name="csrf" value="{{ csrf }}">
+                    <button class="secondary">{{ t('Sign out') }}</button>
+                </form>
+                {% endif %}
+            </div>
+        </details>
+    </nav>
+</header>
+<main id="main-content">
+{% for category, message in get_flashed_messages(with_categories=true) %}
+    <p role="status" class="notice {{ category }}">{{ t(message) }}</p>
+{% endfor %}
+<p id="submission-status" class="sr-only" role="status" aria-live="polite"></p>{% block content %}{% endblock %}
+</main>
+<footer><a href="{{ url_for('legal_page',kind='legal_notice') }}">{{ t('Legal notice') }}</a> · <a href="{{ url_for('legal_page',kind='privacy_notice') }}">{{ t('Privacy notice') }}</a><br>{{ t('Payments are recorded here; collect payment separately.') }}</footer>
+<script>
+    const personalMenu = document.querySelector('.personal-menu');
+    document.addEventListener('click', (event) => {
+        if (!personalMenu.contains(event.target)) personalMenu.open = false;
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && personalMenu.open) {
+            personalMenu.open = false;
+            personalMenu.querySelector('summary').focus();
+        }
+    });
+</script>
+<script src="{{ url_for('static',filename='app.js') }}" defer></script>
+</body>
+</html>

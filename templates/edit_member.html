@@ -1,0 +1,12 @@
+{% from 'member_avatar.html' import avatar %}
+{% extends 'base.html' %}{% block content %}
+<h1>{{ t('Edit member') }}</h1><section class="panel">
+<div class="member-identity">{{ avatar(member.id,member.name,member.photo) }}<h2>{{ member.name }}</h2></div>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="csrf" value="{{ csrf }}">
+<label>{{ t('Name') }}<input name="name" value="{{ request.form.get('name',member.name) }}" maxlength="120" required></label>
+<label>{{ t('Unique member code') }}<input name="code" value="{{ request.form.get('code',member.code) }}" maxlength="120" required></label>
+{% include 'photo_fields.html' %}
+{% if member.photo %}<label class="checkbox"><input type="checkbox" name="remove_photo" value="1">{{ t('Remove photo and use initials') }}</label>{% endif %}
+<button>{{ t('Save member') }}</button><a href="{{ url_for('settings') }}">{{ t('Cancel') }}</a>
+</form></section>{% endblock %}
