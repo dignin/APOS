@@ -45,9 +45,9 @@ with tempfile.TemporaryDirectory(prefix="apos-browser-") as directory:
             page.locator('[data-step="1"]').click();assert page.locator('#order-quantity').input_value()=='2'
             page.locator('.product-tile:visible').click();page.wait_for_url('**/tabs/1')
             assert '2 × Coffee' in page.locator('.order-lines').inner_text()
-            page.locator('[data-partial]').click();page.locator('#payment-amount').fill('2.00');page.locator('.payment-submit').click();page.wait_for_url('**/receipts/*')
+            page.locator('[data-partial]').click();page.locator('#payment-amount').fill('2.00');page.locator('.payment-submit').click();page.wait_for_url('**/receipts/*');assert page.locator('.receipt-patron-access a').first.is_visible()
             page.goto(f'{base}/tabs/1');assert '€2.00' in page.locator('.order-summary').inner_text()
-            page.locator('[data-fill]').click();page.locator('input[value=card]').check();page.locator('.payment-submit').click();page.wait_for_url('**/receipts/*')
+            page.locator('[data-fill]').click();page.locator('input[value=card]').check();page.locator('.payment-submit').click();page.wait_for_url('**/receipts/*');assert page.locator('.receipt-patron-access a').first.is_visible()
             page.goto(f'{base}/admin')
             for width in [1024,390]:
                 page.set_viewport_size({'width':width,'height':900})

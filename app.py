@@ -866,12 +866,7 @@ def create_app(config=None):
         tab = open_tab(tab_id)
         lines = db().execute("SELECT * FROM lines WHERE tab_id=? AND id NOT IN (SELECT line_id FROM cancellations) ORDER BY id", (tab_id,)).fetchall()
         total, paid, due = balance(tab_id)
-        base_url = setting("patron_base_url")
-        patron_url = (base_url + url_for("patron", code=tab["code"])
-                      if base_url else url_for("patron", code=tab["code"], _external=True))
-        qr_svg = io.BytesIO()
-        segno.make_qr(patron_url, error="m").save(qr_svg, kind="svg", scale=6, border=4)
-        qr_data = "data:image/svg+xml;base64," + base64.b64encode(qr_svg.getvalue()).decode("ascii")
+        patron_url, qr_data = patron_access(tab["code"])
         return render_template("tab_details.html", tab=tab, lines=lines,
             patron_url=patron_url, patron_qr=qr_data,
             cancellations=db().execute("SELECT lines.*, cancellations.cancelled,cancellations.reason FROM cancellations JOIN lines ON lines.id=cancellations.line_id WHERE tab_id=? ORDER BY cancelled", (tab_id,)).fetchall(),
@@ -975,13 +970,24 @@ def create_app(config=None):
             JOIN members ON members.id=tabs.member_id ORDER BY receipts.id DESC""").fetchall()
         return render_template("receipts.html", receipts=rows, totals={currency: sum(r["total_cents"] for r in rows if r["currency"] == currency) for currency in ("EUR", "USD")})
 
+    def patron_access(code):
+        base_url = setting("patron_base_url")
+        patron_url = (base_url + url_for("patron", code=code)
+                      if base_url else url_for("patron", code=code, _external=True))
+        qr_svg = io.BytesIO()
+        segno.make_qr(patron_url, error="m").save(qr_svg, kind="svg", scale=6, border=4)
+        qr_data = "data:image/svg+xml;base64," + base64.b64encode(qr_svg.getvalue()).decode("ascii")
+        return patron_url, qr_data
+
     @app.get("/receipts/<int:receipt_id>")
     def receipt(receipt_id):
-        row = db().execute("""SELECT receipts.*, members.name, members.code, members.photo, tabs.currency, tabs.closed FROM receipts
+        row = db().execute("""SELECT receipts.*, members.name, members.code, members.photo, tabs.currency, tabs.closed, tabs.code AS guest_code, tabs.expires, tabs.guest_email_state FROM receipts
           JOIN tabs ON tabs.id=receipts.tab_id JOIN members ON members.id=tabs.member_id WHERE receipts.id=?""", (receipt_id,)).fetchone()
         if row is None:
             abort(404, description="Receipt not found.")
-        return render_template("receipt.html", receipt=row, photo_data=photo_data(row["photo"]), total=row["paid_after"] + row["due_after"], paid=row["paid_after"], due=row["due_after"],
+        available = row["guest_email_state"] != "sent" and (not row["expires"] or datetime.now(timezone.utc) < datetime.fromisoformat(row["expires"]))
+        patron_url, patron_qr = patron_access(row["guest_code"]) if available else (None, None)
+        return render_template("receipt.html", receipt=row, patron_url=patron_url, patron_qr=patron_qr, photo_data=photo_data(row["photo"]), total=row["paid_after"] + row["due_after"], paid=row["paid_after"], due=row["due_after"],
             lines=db().execute("SELECT * FROM receipt_lines WHERE receipt_id=? ORDER BY rowid", (receipt_id,)).fetchall())
 
     @app.route("/view", methods=["GET", "POST"])

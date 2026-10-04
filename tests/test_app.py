@@ -490,6 +490,28 @@ class POSTest(unittest.TestCase):
             csrf = session["csrf"]
         return guest, csrf
 
+    def test_staff_receipt_patron_access_tracks_live_expiry_and_revocation(self):
+        tab=self.open_tab()
+        self.post(tab+"/items",product_id="1",quantity="2")
+        self.pay(tab,"2.00")
+        code=self.rows("SELECT code FROM tabs")[0][0]
+        self.post("/admin",base_url="https://apos.example.org")
+        path="/receipts/1"
+        page=self.client.get(path).get_data(as_text=True)
+        self.assertIn('https://apos.example.org/view/'+code,page)
+        self.assertIn('data:image/svg+xml;base64,',page)
+        self.assertEqual(self.app.test_client().get(path).headers['Location'],'/login')
+        self.pay(tab,"3.00")
+        for path in ('/receipts/1','/receipts/2'):
+            self.assertIn('https://apos.example.org/view/'+code,self.client.get(path).get_data(as_text=True))
+        self.execute("UPDATE tabs SET guest_email_state='sent'")
+        self.assertNotIn(code,self.client.get(path).get_data(as_text=True))
+        self.execute("UPDATE tabs SET guest_email_state=NULL,expires=?",((datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat(),))
+        page=self.client.get(path).get_data(as_text=True)
+        self.assertNotIn(code,page)
+        self.assertNotIn('receipt-patron-access',page)
+        self.assertIn('Total paid',page)
+
     def test_guest_rename_is_scoped_validated_and_link_limited(self):
         self.open_tab()
         member_code = self.rows("SELECT code FROM tabs WHERE member_id=1")[0][0]
