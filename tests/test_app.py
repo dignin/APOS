@@ -490,6 +490,91 @@ class POSTest(unittest.TestCase):
             csrf = session["csrf"]
         return guest, csrf
 
+    def test_guest_rename_is_scoped_validated_and_link_limited(self):
+        self.open_tab()
+        member_code = self.rows("SELECT code FROM tabs WHERE member_id=1")[0][0]
+        member, csrf = self.guest_client(member_code)
+        self.assertNotIn('/name"', member.get("/view/"+member_code).get_data(as_text=True))
+        self.assertEqual(member.post("/view/"+member_code+"/name",data={"csrf":csrf,"name":"Changed"}).status_code,403)
+        self.post("/guests")
+        code = self.rows("SELECT code FROM tabs WHERE member_id=2")[0][0]
+        guest, csrf = self.guest_client(code)
+        self.assertEqual(guest.post("/view/"+code+"/name",data={"name":"Alex Guest"}).status_code,400)
+        guest.post("/view/"+code+"/name",data={"csrf":csrf,"name":"Alex Guest"})
+        self.assertEqual(self.rows("SELECT name,guest_number FROM members WHERE id=2"),[("Alex Guest",1)])
+        for name in ("", "x"*121, "Two\nLines"):
+            guest.post("/view/"+code+"/name",data={"csrf":csrf,"name":name})
+        self.assertEqual(self.rows("SELECT name FROM members WHERE id=2"),[("Alex Guest",)])
+        guest.post("/view/"+code+"/name",data={"csrf":csrf,"name":"<script>test</script>"})
+        self.assertIn('&lt;script&gt;',guest.get("/view/"+code).get_data(as_text=True))
+        self.execute("UPDATE tabs SET expires=? WHERE member_id=2",((datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat(),))
+        self.assertEqual(guest.post("/view/"+code+"/name",data={"csrf":csrf,"name":"Late"}).status_code,404)
+
+    def test_tagline_escapes_propagates_and_rejects_invalid_input(self):
+        tab=self.open_tab()
+        self.post("/admin",tagline="Association <Club>")
+        code=self.rows("SELECT code FROM tabs")[0][0]
+        self.assertIn('APOS — Association &lt;Club&gt;',self.client.get('/').get_data(as_text=True))
+        self.assertIn('APOS — Association &lt;Club&gt;',self.client.get('/view/'+code).get_data(as_text=True))
+        self.post("/admin",tagline="x"*121)
+        self.assertEqual(self.rows("SELECT value FROM settings WHERE key='tagline'"),[("Association <Club>",)])
+        self.post("/admin",tagline="")
+        self.assertEqual(self.rows("SELECT value FROM settings WHERE key='tagline'"),[("",)])
+
+    def test_guest_photo_mail_embeds_then_deletes_and_failure_preserves(self):
+        import smtplib
+        from unittest.mock import patch
+        self.post("/products",name="Tea",price="2.50",usd_price="3.00")
+        tab=self.post("/guests").headers["Location"]
+        self.post(tab+"/items",product_id="1",quantity="1")
+        self.pay(tab,"2.50")
+        code=self.rows("SELECT code FROM tabs")[0][0]
+        guest,csrf=self.guest_client(code)
+        guest.post('/view/'+code+'/photo',data={"csrf":csrf,"photo":(io.BytesIO(self.photo_bytes()),"photo.png")})
+        saved=self.rows("SELECT photo FROM members")[0][0]
+        self.enable_mail()
+        with patch('app.send_bon',side_effect=smtplib.SMTPException('failed')):
+            guest.post('/view/'+code+'/email',data={"csrf":csrf,"email":"guest@example.org"})
+        self.assertEqual(self.rows("SELECT photo FROM members")[0][0],saved)
+        with patch('app.send_bon') as send:
+            guest.post('/view/'+code+'/email',data={"csrf":csrf,"email":"guest@example.org"})
+            self.assertEqual(send.call_args.kwargs['photo'],saved)
+            self.assertIn('data:image/jpeg;base64,',send.call_args.args[5])
+            self.assertNotIn(code,send.call_args.args[5])
+        self.assertEqual(self.rows("SELECT photo FROM members"),[(None,)])
+        self.assertEqual(len(self.rows("SELECT * FROM receipts")),1)
+
+    def test_expiry_cleanup_deletes_guest_photo_preserves_member_and_active_guest(self):
+        self.open_tab()
+        self.post('/members/1/edit',name="Alex",code="M001",photo=(io.BytesIO(self.photo_bytes()),"photo.png"))
+        self.post('/guests')
+        self.post('/members/2/edit',name="Guest",code="GTEST",photo=(io.BytesIO(self.photo_bytes()),"photo.png"))
+        self.post('/guests')
+        self.post('/members/3/edit',name="Active Guest",code="GACTIVE",photo=(io.BytesIO(self.photo_bytes()),"photo.png"))
+        self.execute("UPDATE tabs SET expires=? WHERE member_id IN (1,2)",((datetime.now(timezone.utc)-timedelta(seconds=1)).isoformat(),))
+        with self.app.app_context():
+            self.app.cleanup_guest_photos()
+        self.assertIsNotNone(self.rows("SELECT photo FROM members WHERE id=1")[0][0])
+        self.assertEqual(self.rows("SELECT photo FROM members WHERE id=2"),[(None,)])
+        self.assertIsNotNone(self.rows("SELECT photo FROM members WHERE id=3")[0][0])
+
+    def test_bon_pages_include_current_photo_only_when_saved(self):
+        tab = self.open_tab()
+        self.post(tab+"/items",product_id="1",quantity="1")
+        self.pay(tab,"2.50")
+        code = self.rows("SELECT code FROM tabs")[0][0]
+        guest, csrf = self.guest_client(code)
+        for client, path in ((guest,"/view/"+code),(self.client,"/receipts/1")):
+            self.assertNotIn('class="bon-photo"',client.get(path).get_data(as_text=True))
+        self.post("/members/1/edit",name="Alex Taylor",code="M001",photo=(io.BytesIO(self.photo_bytes()),"avatar.png"))
+        for client, path in ((guest,"/view/"+code),(self.client,"/receipts/1")):
+            page = client.get(path).get_data(as_text=True)
+            self.assertIn('class="bon-photo"',page)
+            self.assertIn('data:image/jpeg;base64,',page)
+        self.assertEqual(self.app.test_client().get("/receipts/1").headers["Location"],"/login")
+        self.post("/members/1/edit",name="Alex Taylor",code="M001",remove_photo="1")
+        self.assertNotIn('class="bon-photo"',guest.get("/view/"+code).get_data(as_text=True))
+
     def test_guest_mail_hidden_until_configured_enabled_and_success_revokes_all_access(self):
         from unittest.mock import patch
         tab = self.open_tab()
@@ -508,6 +593,8 @@ class POSTest(unittest.TestCase):
             send.assert_not_called()
         self.assertEqual(self.rows("SELECT guest_email_state FROM tabs"),[(None,)])
         self.pay(tab,"3.00")
+        self.post("/members/1/edit",name="Alice PRIVATE",code="M001",photo=(io.BytesIO(self.photo_bytes()),"photo.png"))
+        member_photo=self.rows("SELECT photo FROM members WHERE id=1")[0][0]
         self.assertIn('name="email"',guest.get("/view/"+code).get_data(as_text=True))
         with patch("app.send_bon") as send:
             response = guest.post("/view/"+code+"/email",data={"csrf":csrf,"email":"guest@example.org"})
@@ -525,6 +612,7 @@ class POSTest(unittest.TestCase):
         self.assertEqual(len(self.rows("SELECT * FROM receipts")),2)
         self.assertEqual(len(self.rows("SELECT * FROM lines")),1)
         self.assertEqual(self.rows("SELECT guest_email_state FROM tabs"),[("sent",)])
+        self.assertEqual(self.rows("SELECT photo FROM members WHERE id=1")[0][0],member_photo)
         self.assertEqual(guest.post("/view/"+code+"/email",data={"csrf":csrf,"email":"guest@example.org"}).status_code,404)
 
     def test_failed_mail_invalid_email_and_disabled_account_do_not_revoke_link(self):

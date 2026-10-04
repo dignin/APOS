@@ -3,12 +3,12 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}APOS{% endblock %}</title>
+    <title>{% block title %}{{ system_title }}{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static',filename='style.css') }}">
 </head>
 <body data-pending-label="{{ t('Saving…') }}"><a class="skip-link" href="#main-content">{{ t('Skip to content') }}</a>
 <header>
-    <a class="brand" href="{{ url_for('index') }}">APOS <span>{{ t('Association point of sale') }}</span></a>
+    <a class="brand" href="{{ url_for('index') }}">{{ system_title }} <span>{{ t('Association point of sale') }}</span></a>
     <nav>
         {% if session.get("staff") %}
         <a href="{{ url_for('index') }}" {% if request.endpoint in ['index','tab_details'] %}aria-current="page"{% endif %}>{{ t('Open tabs') }}</a>

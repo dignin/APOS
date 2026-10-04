@@ -24,6 +24,11 @@ from pathlib import Path
 from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for, Response
 
 
+def photo_data(photo):
+    """Embed the normalized saved JPEG on authorised bon pages."""
+    return "data:image/jpeg;base64," + base64.b64encode(photo).decode("ascii") if photo else None
+
+
 def price_cents(value, maximum=999999):
     try:
         amount = Decimal(str(value))
@@ -195,6 +200,7 @@ def create_app(config=None):
             db().execute("INSERT OR IGNORE INTO settings VALUES ('smtp_config',?)", (json.dumps({"enabled":False,"host":"","port":587,"sender":"","username":"","security":"starttls","password":""}),))
             db().execute("INSERT OR IGNORE INTO settings VALUES ('guest_ordering','0')")
             db().execute("INSERT OR IGNORE INTO settings VALUES ('currency','EUR')")
+            db().execute("INSERT OR IGNORE INTO settings VALUES ('tagline','')")
             for key in ("legal_notice", "privacy_notice"):
                 db().execute("INSERT OR IGNORE INTO settings VALUES (?,'')", (key,))
                 db().execute("INSERT OR IGNORE INTO settings VALUES (?,'plain')", (key + "_format",))
@@ -218,6 +224,17 @@ def create_app(config=None):
             if not db().execute("SELECT 1 FROM accounts").fetchone():
                 db().execute("INSERT INTO accounts(username,password_hash,role) VALUES ('admin',?,'Admin')", (db().execute("SELECT value FROM settings WHERE key='staff_password_hash'").fetchone()[0],))
             db().execute("INSERT OR IGNORE INTO settings VALUES ('patron_base_url',?)", (normalize_base_url(app.config["PATRON_BASE_URL"]),))
+
+    def cleanup_guest_photos():
+        # A photo is shared by the profile: keep it while any guest link remains valid.
+        now = timestamp()
+        with db():
+            db().execute("""UPDATE members SET photo=NULL WHERE is_guest=1 AND photo IS NOT NULL
+              AND EXISTS (SELECT 1 FROM tabs WHERE member_id=members.id)
+              AND NOT EXISTS (SELECT 1 FROM tabs WHERE member_id=members.id
+                AND guest_email_state IS NOT 'sent' AND (expires IS NULL OR expires>?))""", (now,))
+
+    app.cleanup_guest_photos = cleanup_guest_photos
 
     def setting(key):
         return db().execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()[0]
@@ -253,10 +270,12 @@ def create_app(config=None):
             session["csrf"] = secrets.token_hex(32)
         from translations import translate
         return {"csrf": session["csrf"], "t": lambda message: translate(message, session.get("lang", "de")),
-                "lang": session.get("lang", "de"), "current_user": g.get("user"), "is_admin": bool(g.get("user") and g.user["role"] == "Admin")}
+                "system_title": "APOS" + (" — " + setting("tagline") if setting("tagline") else ""),
+                "tagline": setting("tagline"), "lang": session.get("lang", "de"), "current_user": g.get("user"), "is_admin": bool(g.get("user") and g.user["role"] == "Admin")}
 
     @app.before_request
     def protect_forms():
+        cleanup_guest_photos()
         if request.method == "POST":
             token = request.form.get("csrf", "")
             if not token or not secrets.compare_digest(token.encode(), session.get("csrf", "").encode()):
@@ -278,7 +297,7 @@ def create_app(config=None):
                 session.clear()
                 session["lang"] = language
         session["staff"] = bool(g.user and g.user["role"] in ("Staff", "Admin"))
-        public = {"login", "language", "patron", "patron_lookup", "patron_photo", "patron_email", "patron_email_sent", "patron_add_item", "legal_page", "static"}
+        public = {"login", "language", "patron", "patron_lookup", "patron_photo", "patron_email", "patron_email_sent", "patron_add_item", "patron_name", "legal_page", "static"}
         admin = {"settings", "mail_settings", "edit_notice", "notice_preview", "accounts", "edit_account", "add_member", "edit_member", "remove_member",
                  "add_product", "edit_product", "toggle_product", "product_stock", "catalog_upload", "catalog_preview", "catalog_import", "catalog_template",
                  "member_upload", "member_preview", "member_import", "member_template"}
@@ -327,11 +346,15 @@ def create_app(config=None):
                         raise ValueError("Incorrect current password.")
                     if new_password != request.form.get("confirm_password", ""):
                         raise ValueError("Passwords do not match.")
+                tagline = request.form.get("tagline", setting("tagline")).strip()
+                if len(tagline) > 120 or any(ord(char) < 32 for char in tagline):
+                    raise ValueError("Tagline must be at most 120 characters on one line.")
                 notices = {key: request.form.get(key, setting(key)).strip() for key in ("legal_notice", "privacy_notice")}
                 if any(len(value) > 20000 for value in notices.values()):
                     raise ValueError("Legal notices must not exceed 20000 characters.")
                 save_settings(db(), request.form.get("base_url", ""), new_password or None, request.form.get("guest_ordering") == "1", g.user["id"], request.form.get("currency", setting("currency")))
                 with db():
+                    db().execute("UPDATE settings SET value=? WHERE key='tagline'", (tagline,))
                     db().executemany("UPDATE settings SET value=? WHERE key=?", [(value,key) for key,value in notices.items()])
                     for key in notices:
                         if key in request.form:
@@ -954,11 +977,11 @@ def create_app(config=None):
 
     @app.get("/receipts/<int:receipt_id>")
     def receipt(receipt_id):
-        row = db().execute("""SELECT receipts.*, members.name, members.code, tabs.currency, tabs.closed FROM receipts
+        row = db().execute("""SELECT receipts.*, members.name, members.code, members.photo, tabs.currency, tabs.closed FROM receipts
           JOIN tabs ON tabs.id=receipts.tab_id JOIN members ON members.id=tabs.member_id WHERE receipts.id=?""", (receipt_id,)).fetchone()
         if row is None:
             abort(404, description="Receipt not found.")
-        return render_template("receipt.html", receipt=row, total=row["paid_after"] + row["due_after"], paid=row["paid_after"], due=row["due_after"],
+        return render_template("receipt.html", receipt=row, photo_data=photo_data(row["photo"]), total=row["paid_after"] + row["due_after"], paid=row["paid_after"], due=row["due_after"],
             lines=db().execute("SELECT * FROM receipt_lines WHERE receipt_id=? ORDER BY rowid", (receipt_id,)).fetchall())
 
     @app.route("/view", methods=["GET", "POST"])
@@ -982,9 +1005,9 @@ def create_app(config=None):
     @app.get("/view/<code>")
     def patron(code):
         row = valid_guest_tab(code)
-        member = db().execute("SELECT name,photo,active FROM members WHERE id=?", (row["member_id"],)).fetchone()
+        member = db().execute("SELECT name,photo,active,is_guest FROM members WHERE id=?", (row["member_id"],)).fetchone()
         total, paid, due = balance(row["id"])
-        return render_template("patron.html", tab=row, guest_initials=initials(member["name"]), guest_has_photo=bool(member["photo"]), can_upload_photo=bool(member["active"]), mail_enabled=row["closed"] is not None and mail_ready(json.loads(setting("smtp_config"))),
+        return render_template("patron.html", tab=row, guest_name=member["name"], can_edit_name=bool(member["is_guest"] and member["active"]), photo_data=photo_data(member["photo"]), guest_initials=initials(member["name"]), guest_has_photo=bool(member["photo"]), can_upload_photo=bool(member["active"]), mail_enabled=row["closed"] is not None and mail_ready(json.loads(setting("smtp_config"))),
             lines=db().execute("SELECT * FROM lines WHERE tab_id=? AND id NOT IN (SELECT line_id FROM cancellations) ORDER BY id", (row["id"],)).fetchall(),
             guest_ordering=setting("guest_ordering") == "1" and row["closed"] is None and row["guest_email_state"] != "sending",
             products=db().execute("SELECT * FROM products WHERE active=1 AND in_stock=1 AND alcohol=0 ORDER BY name").fetchall(),
@@ -1008,6 +1031,22 @@ def create_app(config=None):
         except ValueError as error:
             flash(str(error), "error")
         return redirect(url_for("patron",code=tab["code"]))
+
+    @app.post("/view/<code>/name")
+    def patron_name(code):
+        with db():
+            db().execute("BEGIN IMMEDIATE")
+            tab = valid_guest_tab(code)
+            member = db().execute("SELECT active,is_guest FROM members WHERE id=?", (tab["member_id"],)).fetchone()
+            if not member or not member["active"] or not member["is_guest"]:
+                abort(403)
+            name = request.form.get("name", "").strip()
+            if not name or len(name) > 120 or any(ord(char) < 32 for char in name):
+                flash("Enter a name of 1–120 characters on one line.", "error")
+                return redirect(url_for("patron", code=tab["code"]))
+            db().execute("UPDATE members SET name=? WHERE id=?", (name,tab["member_id"]))
+        flash("Name updated.", "success")
+        return redirect(url_for("patron", code=tab["code"]))
 
     @app.route("/view/<code>/photo", methods=["GET", "POST"])
     def patron_photo(code):
@@ -1056,14 +1095,15 @@ def create_app(config=None):
                 return redirect(url_for("patron", code=tab["code"]))
             lines = db().execute("SELECT * FROM lines WHERE tab_id=? AND id NOT IN (SELECT line_id FROM cancellations) ORDER BY id", (tab["id"],)).fetchall()
             total, paid, due = balance(tab["id"])
-            html = render_template("emailed_bon.html", lines=lines,tab=tab,total=total,paid=paid,due=due)
+            photo = db().execute("SELECT photo FROM members WHERE id=?", (tab["member_id"],)).fetchone()["photo"]
+            html = render_template("emailed_bon.html", lines=lines,tab=tab,total=total,paid=paid,due=due,photo_data=photo_data(photo))
             from translations import translate
             t = lambda value: translate(value,session.get("lang","de"))
             text = t("Your bon") + "\n\n" + "\n".join(f"{line['quantity']} × {line['name']} · {money(line['cents'],tab['currency'])} · {money(line['cents']*line['quantity'],tab['currency'])} · {line['ordered']} UTC" for line in lines)
             text += f"\n\n{t('Total ordered')}: {money(total,tab['currency'])}\n{t('Paid so far')}: {money(paid,tab['currency'])}\n{t('Outstanding balance')}: {money(due,tab['currency'])}"
             db().execute("UPDATE tabs SET guest_email_state='sending' WHERE id=?", (tab["id"],))
         try:
-            send_bon(config,app.config["SECRET_KEY"],recipient,t("Your bon") + " · APOS",text,html)
+            send_bon(config,app.config["SECRET_KEY"],recipient,t("Your bon") + " · " + "APOS" + (" — " + setting("tagline") if setting("tagline") else ""),text,html,photo=photo)
         except (smtplib.SMTPException,OSError,InvalidToken):
             with db():
                 db().execute("UPDATE tabs SET guest_email_state=NULL WHERE id=? AND guest_email_state='sending'",(tab["id"],))
@@ -1071,6 +1111,7 @@ def create_app(config=None):
             return redirect(url_for("patron",code=tab["code"]))
         with db():
             db().execute("UPDATE tabs SET guest_email_state='sent',expires=? WHERE id=?", (timestamp(),tab["id"]))
+            db().execute("UPDATE members SET photo=NULL WHERE id=? AND is_guest=1", (tab["member_id"],))
         return redirect(url_for("patron_email_sent"))
 
     @app.get("/bon-sent")

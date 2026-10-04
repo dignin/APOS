@@ -57,13 +57,19 @@ def ready(config):
     return bool(config.get("enabled") and config.get("host") and config.get("sender") and config.get("port") and (not config.get("username") or config.get("password")))
 
 
-def send_bon(config, secret, recipient, subject, text, html):
+def send_bon(config, secret, recipient, subject, text, html, photo=None):
     message = EmailMessage()
     message["From"] = config["sender"]
     message["To"] = recipient
     message["Subject"] = subject
     message.set_content(text)
-    message.add_alternative(html, subtype="html")
+    email_html = html
+    if photo:
+        image_uri = "data:image/jpeg;base64," + base64.b64encode(photo).decode("ascii")
+        email_html = html.replace(image_uri, "cid:profile-photo@apos")
+    message.add_alternative(email_html, subtype="html")
+    if photo:
+        message.get_payload()[-1].add_related(photo, maintype="image", subtype="jpeg", cid="<profile-photo@apos>", disposition="inline")
     message.add_attachment(html.encode("utf-8"), maintype="text", subtype="html", filename="bon.html")
     context = ssl.create_default_context()
     factory = smtplib.SMTP_SSL if config["security"] == "ssl" else smtplib.SMTP

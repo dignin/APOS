@@ -219,5 +219,7 @@ DE.update({'Counter': 'Theke', 'active': 'aktiv', 'Open or resume a member tab':
 
 DE.update({'Partial payment': 'Teilzahlung', 'Skip to content': 'Zum Inhalt springen'})
 
+DE.update({'Your guest name': 'Ihr Gastname', 'Save name': 'Name speichern', 'Name updated.': 'Name aktualisiert.', 'Enter a name of 1–120 characters on one line.': 'Geben Sie einen Namen mit 1–120 Zeichen in einer Zeile ein.', 'APOS tagline': 'APOS-Untertitel', 'Optional': 'Optional', 'Tagline must be at most 120 characters on one line.': 'Der Untertitel darf höchstens 120 Zeichen in einer Zeile enthalten.', 'Your saved profile photo will be included in the emailed bon.': 'Ihr gespeichertes Profilfoto wird in den per E-Mail versendeten Bon aufgenommen.'})
+
 def translate(message, language):
     return DE.get(message, message) if language == "de" else message

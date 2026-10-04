@@ -5,7 +5,7 @@ a{color:var(--primary);text-underline-offset:4px;overflow-wrap:anywhere}
 a:hover{color:#d1f5df}
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px max(24px,calc((100vw - 1440px)/2));display:flex;align-items:center;justify-content:space-between;gap:20px}
 header a{color:var(--subtle)}
-.brand{color:var(--foreground);font-size:22px;font-weight:750;text-decoration:none;letter-spacing:-.04em}
+.brand{min-width:0;overflow-wrap:anywhere;color:var(--foreground);font-size:22px;font-weight:750;text-decoration:none;letter-spacing:-.04em}
 .brand span{display:block;font-size:11px;font-weight:500;letter-spacing:0;color:var(--subtle);margin-top:2px}
 nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 nav>a{display:flex;align-items:center;min-height:48px;padding:10px 14px;text-decoration:none;border-radius:6px;white-space:nowrap}
@@ -19,7 +19,7 @@ p{line-height:1.55;margin:10px 0 16px}
 small{font-size:12px}
 .heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}
 .heading p{margin:7px 0 0}
-.eyebrow{font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.09em;color:var(--subtle);margin:0 0 8px!important}
+.eyebrow{overflow-wrap:anywhere;font-size:11px;font-weight:650;text-transform:uppercase;letter-spacing:.09em;color:var(--subtle);margin:0 0 8px!important}
 .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:22px;margin-bottom:20px;min-width:0}
 .section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 .section-heading h2{margin:0}

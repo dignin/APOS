@@ -162,3 +162,9 @@ In the full-screen notice editor, choose **Markdown** to write or paste headings
 ## Global currency setting
 
 Admin selects one operating currency (EUR by default, or USD). Staff cannot change it, and tab/guest creation does not accept a currency override. New tabs snapshot the current setting inside their creation transaction; there is no currency choice per user or tab. The catalog's existing EUR/USD prices determine the amount charged. Changing the setting affects new tabs only: existing open/settled tabs, payment snapshots, guest pages and historical reports keep their original denomination. No currency conversion or relabelling of recorded amounts is performed. Settle open tabs before switching when a single operational currency is required. Historical reports may therefore still contain both currencies; they remain separate and are not combined without conversion.
+
+## Guest photos, names and APOS tagline
+
+Set the optional APOS tagline in Admin. It appears in the app header, page titles, printed payment records and emailed bons. Saved photos appear as circles on bons. Email contains an embedded photo that remains readable after guest-link revocation. Successful email clears non-member guest photos from APOS; member photos remain. Expiry cleanup runs on requests and every 30 seconds while main.py serves, and catches up after restart. Backup copies and delivered/downloaded copies need separate retention handling. When another valid tab uses the same guest profile, expiry cleanup keeps the shared photo until its remaining link ends.
+
+An active non-member guest can edit their displayed name using a valid patron link. Members cannot rename themselves through that form. Guest number and access code remain unchanged.

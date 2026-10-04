@@ -3,7 +3,7 @@
 <section class="panel">
 <h2>{{ t('General settings') }}</h2>
 <form method="post" class="settings-form">
-<input type="hidden" name="csrf" value="{{ csrf }}">
+<input type="hidden" name="csrf" value="{{ csrf }}"><label>{{ t('APOS tagline') }}<input name="tagline" value="{{ tagline }}" maxlength="120" placeholder="{{ t('Optional') }}"></label>
 <label>{{ t('Currency') }}<select name="currency"><option value="EUR" {% if currency == 'EUR' %}selected{% endif %}>EUR (€)</option><option value="USD" {% if currency == 'USD' %}selected{% endif %}>USD ($)</option></select></label><p>{{ t('Currency changes apply to new tabs. Existing tabs and receipts keep their recorded currency.') }}</p><label>{{ t('Guest-facing URL / FQDN') }}<input name="base_url" value="{{ base_url }}" placeholder="https://apos.example.org" maxlength="2048"></label>
 <details class="settings-password"><summary>{{ t('Change password') }}</summary><div class="form-grid"><label>{{ t('Current password') }}<input type="password" name="current_password" autocomplete="current-password"></label>
 <label>{{ t('New password (optional)') }}<input type="password" name="new_password" minlength="12" maxlength="256" autocomplete="new-password"></label>

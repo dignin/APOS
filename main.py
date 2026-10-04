@@ -62,9 +62,25 @@ def main():
         print(f"Backup saved to {destination}")
     else:
         from waitress import serve
+        from threading import Event, Thread
+        def expire_photos():
+            while not stop_cleanup.is_set():
+                try:
+                    with app.app_context():
+                        app.cleanup_guest_photos()
+                except sqlite3.Error:
+                    app.logger.exception("Guest photo cleanup failed; retrying next interval")
+                stop_cleanup.wait(30)
+        stop_cleanup = Event()
+        cleanup_thread = Thread(target=expire_photos, daemon=True)
+        cleanup_thread.start()
         print(f"APOS: http://{args.host}:{args.port}", flush=True)
         print("Admin username: admin. Password: run 'python main.py password' in another terminal.", flush=True)
-        serve(app, host=args.host, port=args.port)
+        try:
+            serve(app, host=args.host, port=args.port)
+        finally:
+            stop_cleanup.set()
+            cleanup_thread.join(timeout=2)
 
 
 if __name__ == "__main__":

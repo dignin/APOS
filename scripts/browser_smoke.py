@@ -52,8 +52,31 @@ with tempfile.TemporaryDirectory(prefix="apos-browser-") as directory:
             for width in [1024,390]:
                 page.set_viewport_size({'width':width,'height':900})
                 assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),f'Admin overflow {width}'
+            page.locator('input[name=tagline]').fill('Association ' + 'Long' * 20)
+            page.locator('.settings-form > button').click()
+            assert 'APOS — Association' in page.title()
+            for width in [1024,390]:
+                page.set_viewport_size({'width':width,'height':900})
+                assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),f'Tagline overflow {width}'
+            page.goto(f'{base}/')
+            page.locator('form[action="/guests"] button').click()
+            page.locator('.guest-access summary').click()
+            patron_url = page.locator('.guest-access a').last.get_attribute('href')
+            page.goto(patron_url)
+            page.locator('form[action$="/name"] input[name=name]').fill('Alex Guest')
+            page.locator('form[action$="/name"] button').click()
+            assert page.locator('form[action$="/name"] input[name=name]').input_value()=='Alex Guest'
+            import io
+            from PIL import Image
+            photo=io.BytesIO();Image.new('RGB',(80,80),(40,100,80)).save(photo,format='PNG')
+            page.locator('input[name=photo]').set_input_files({'name':'test.png','mimeType':'image/png','buffer':photo.getvalue()})
+            page.locator('form[action$="/photo"] button').click()
+            assert page.locator('.bon-photo').evaluate('img => img.complete && img.naturalWidth === 256')
+            page.screenshot(path='/tmp/apos-guest-photo-mobile.png',full_page=True)
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth'),'Guest page overflow'
+            page.screenshot(path='/tmp/apos-guest-photo-mobile.png',full_page=True)
             assert not errors,errors
-            print('PASS: product search, quantity, actual order submission, partial cash and full card settlement, admin responsive, no JavaScript errors')
+            print('PASS: product search, quantity, actual order submission, partial cash and full card settlement, admin responsive, long tagline, guest rename/photo rendering, no JavaScript errors')
             browser.close()
     finally:
         server.shutdown();thread.join()
