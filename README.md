@@ -62,7 +62,7 @@ Staff continue to control removal under the existing rules. Fully settled, expir
 
 Open **Admin → Outbound mail account / Postausgangskonto**. Enter SMTP hostname, port, security mode (STARTTLS, TLS/SSL or a local relay), sender address and any authentication credentials. Tick **Enable guest email** and save. Until a complete account is configured and enabled, guests do not see the email option. SMTP passwords are encrypted in SQLite using the persistent application secret; blank password input preserves a saved password for the same server and username.
 
-While their guest link is valid, guests can enter an email address and receive the bon as a message with a printable `bon.html` attachment. After the SMTP server accepts the message, guest access is immediately revoked, including photo access. Staff accounting records remain intact. A failed send leaves the link available. Without successful emailing, guest access expires 24 hours after full settlement as usual. SMTP acceptance does not guarantee delivery to an inbox.
+Only after full settlement and closure, while their guest link is valid and outbound mail is enabled, guests can enter an email address and receive the bon as a message with a printable `bon.html` attachment. After the SMTP server accepts the message, guest access is immediately revoked, including photo access. Staff accounting records remain intact. A failed send leaves the link available. Without successful emailing, guest access expires 24 hours after full settlement as usual. SMTP acceptance does not guarantee delivery to an inbox.
 
 ## Upload a catalog and manage availability
 

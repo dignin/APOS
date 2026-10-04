@@ -984,7 +984,7 @@ def create_app(config=None):
         row = valid_guest_tab(code)
         member = db().execute("SELECT name,photo,active FROM members WHERE id=?", (row["member_id"],)).fetchone()
         total, paid, due = balance(row["id"])
-        return render_template("patron.html", tab=row, guest_initials=initials(member["name"]), guest_has_photo=bool(member["photo"]), can_upload_photo=bool(member["active"]), mail_enabled=mail_ready(json.loads(setting("smtp_config"))),
+        return render_template("patron.html", tab=row, guest_initials=initials(member["name"]), guest_has_photo=bool(member["photo"]), can_upload_photo=bool(member["active"]), mail_enabled=row["closed"] is not None and mail_ready(json.loads(setting("smtp_config"))),
             lines=db().execute("SELECT * FROM lines WHERE tab_id=? AND id NOT IN (SELECT line_id FROM cancellations) ORDER BY id", (row["id"],)).fetchall(),
             guest_ordering=setting("guest_ordering") == "1" and row["closed"] is None and row["guest_email_state"] != "sending",
             products=db().execute("SELECT * FROM products WHERE active=1 AND in_stock=1 AND alcohol=0 ORDER BY name").fetchall(),
@@ -1039,7 +1039,7 @@ def create_app(config=None):
     def patron_email(code):
         tab = valid_guest_tab(code)
         config = json.loads(setting("smtp_config"))
-        if not mail_ready(config):
+        if not mail_ready(config) or tab["closed"] is None:
             abort(404)
         try:
             recipient = email_address(request.form.get("email", ""))
@@ -1049,6 +1049,8 @@ def create_app(config=None):
         with db():
             db().execute("BEGIN IMMEDIATE")
             tab = valid_guest_tab(code)
+            if tab["closed"] is None:
+                abort(404)
             if tab["guest_email_state"] == "sending":
                 flash("An email is already being sent. Please wait.", "error")
                 return redirect(url_for("patron", code=tab["code"]))

@@ -499,6 +499,15 @@ class POSTest(unittest.TestCase):
         self.assertNotIn('name="email"',guest.get("/view/"+code).get_data(as_text=True))
         self.assertEqual(guest.post("/view/"+code+"/email",data={"csrf":csrf,"email":"guest@example.org"}).status_code,404)
         self.enable_mail()
+        with patch("app.send_bon") as send:
+            self.assertNotIn('name="email"',guest.get("/view/"+code).get_data(as_text=True))
+            self.assertEqual(guest.post("/view/"+code+"/email",data={"csrf":csrf,"email":"guest@example.org"}).status_code,404)
+            self.pay(tab,"2.00")
+            self.assertNotIn('name="email"',guest.get("/view/"+code).get_data(as_text=True))
+            self.assertEqual(guest.post("/view/"+code+"/email",data={"csrf":csrf,"email":"guest@example.org"}).status_code,404)
+            send.assert_not_called()
+        self.assertEqual(self.rows("SELECT guest_email_state FROM tabs"),[(None,)])
+        self.pay(tab,"3.00")
         self.assertIn('name="email"',guest.get("/view/"+code).get_data(as_text=True))
         with patch("app.send_bon") as send:
             response = guest.post("/view/"+code+"/email",data={"csrf":csrf,"email":"guest@example.org"})
@@ -512,7 +521,8 @@ class POSTest(unittest.TestCase):
             self.assertNotIn("Alice PRIVATE",args[5])
         self.assertEqual(guest.get("/view/"+code).status_code,404)
         self.assertEqual(guest.get("/view/"+code+"/photo").status_code,404)
-        self.assertEqual(self.client.get(tab).status_code,200)
+        self.assertEqual(self.client.get("/receipts/1").status_code,200)
+        self.assertEqual(len(self.rows("SELECT * FROM receipts")),2)
         self.assertEqual(len(self.rows("SELECT * FROM lines")),1)
         self.assertEqual(self.rows("SELECT guest_email_state FROM tabs"),[("sent",)])
         self.assertEqual(guest.post("/view/"+code+"/email",data={"csrf":csrf,"email":"guest@example.org"}).status_code,404)
@@ -520,7 +530,9 @@ class POSTest(unittest.TestCase):
     def test_failed_mail_invalid_email_and_disabled_account_do_not_revoke_link(self):
         import smtplib
         from unittest.mock import patch
-        self.open_tab()
+        tab = self.open_tab()
+        self.post(tab+"/items",product_id="1",quantity="1")
+        self.pay(tab,"2.50")
         code = self.rows("SELECT code FROM tabs")[0][0]
         guest, csrf = self.guest_client(code)
         self.enable_mail()
