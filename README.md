@@ -2,7 +2,7 @@
 
 A pub-style association point of sale with persistent running tabs, partial/full payment, menu products, private patron viewing codes and anonymous reports.
 
-Version 0.5 implements the version-one specification and supports German and English, EUR and USD, and one shared local POS computer. Patron access remains available until 24 hours after full settlement. Payments are recorded after collection by cash or an external card terminal.
+Version 0.6 implements the version-one specification and supports German and English, EUR and USD, and one shared local POS computer. Patron access remains available until 24 hours after full settlement. Payments are recorded after collection by cash or an external card terminal.
 
 Read the [complete v1 specification](docs/SPECIFICATION.md) and [operating guide](docs/OPERATIONS.md).
 
