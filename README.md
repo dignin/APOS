@@ -6,6 +6,10 @@ Version 0.6 implements the version-one specification and supports German and Eng
 
 Read the [complete v1 specification](docs/SPECIFICATION.md) and [operating guide](docs/OPERATIONS.md).
 
+## Project website
+
+The promotional GitHub Pages site lives in [`site/`](site/README.md) and is published by the dedicated Pages workflow.
+
 ## Start locally
 
 Requires Python 3.10 or newer. Python 3.12 is tested.
