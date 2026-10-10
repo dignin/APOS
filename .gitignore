@@ -18,3 +18,8 @@ instance/
 *.pem
 uploads/
 backups/
+
+# Generated documentation; built by the Pages workflow
+/site/docs/*.html
+/site/docs/en/
+/site/docs/de/

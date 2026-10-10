@@ -1,4 +1,6 @@
-# APOS v1 operating guide
+# APOS technical operating reference
+
+For task-based instructions reflecting current account permissions, use the [German and English role guides](README.md). This older reference includes historical workflow descriptions; the role guides clarify the current Admin/Staff split.
 
 ## Install and start
 
